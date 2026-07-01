@@ -270,6 +270,7 @@ export default function App() {
   const floatingTextsRef = useRef<FloatingText[]>([]);
   const triggerRingRef = useRef<TriggerRing | null>(null);
   const currentPopCountRef = useRef<number>(0);
+  const screenShakeRef = useRef<number>(0);
 
   // Initialize bubbles on load or reset
   const initGameObjects = () => {
@@ -386,6 +387,11 @@ export default function App() {
       soundEngineRef.current.playTrigger();
     }
 
+    // Direct, synchronous physical vibration click on tap (authorized by all modern mobile browsers)
+    if (isHapticEnabledRef.current && typeof navigator !== 'undefined' && navigator.vibrate) {
+      navigator.vibrate(20);
+    }
+
     // Spawn player expanding ring
     triggerRingRef.current = {
       x,
@@ -444,6 +450,10 @@ export default function App() {
         navigator.vibrate(6);
       }
     }
+
+    // Apply dynamic visual screen shake (simulated tactile rumble) that scales with reaction size
+    const shakeIntensity = Math.min(8.0, 1.5 + (popIdx * 0.18));
+    screenShakeRef.current = Math.max(screenShakeRef.current, shakeIntensity);
 
     // Add glowing floating text at pop center
     floatingTextsRef.current.push({
@@ -513,6 +523,21 @@ export default function App() {
         ctx.moveTo(0, y);
         ctx.lineTo(width, y);
         ctx.stroke();
+      }
+
+      // Update screen shake decay
+      if (screenShakeRef.current > 0.05) {
+        screenShakeRef.current *= 0.88;
+      } else {
+        screenShakeRef.current = 0;
+      }
+
+      // Save canvas state before applying screen shake offsets for game elements
+      ctx.save();
+      if (screenShakeRef.current > 0.1) {
+        const dx = (Math.random() - 0.5) * screenShakeRef.current;
+        const dy = (Math.random() - 0.5) * screenShakeRef.current;
+        ctx.translate(dx, dy);
       }
 
       // 2. Update and Draw Particles (Popped Sparks)
@@ -788,6 +813,9 @@ export default function App() {
         ctx.restore();
       }
 
+      // Restore screen shake canvas state
+      ctx.restore();
+
       // 7. Check Round Termination
       // If we are active, and no rings are left, and the player trigger has finished, the round ends.
       if (
@@ -1034,12 +1062,17 @@ export default function App() {
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 15 }}
-            className="hud-interactive absolute bottom-20 left-1/2 -translate-x-1/2 z-30 px-5 py-3 rounded-full bg-zinc-900/95 border border-zinc-800/80 backdrop-blur-md shadow-2xl max-w-[90%] w-max text-center pointer-events-none flex items-center gap-2"
+            className="hud-interactive absolute bottom-20 left-1/2 -translate-x-1/2 z-30 px-5 py-3 rounded-2xl bg-zinc-900/95 border border-zinc-800/80 backdrop-blur-md shadow-2xl max-w-[90%] w-max text-center pointer-events-none flex items-center gap-3"
           >
-            <Smartphone className="w-4 h-4 text-cyan-400 shrink-0" />
-            <span className="text-[10px] text-zinc-300 font-mono tracking-wider uppercase">
-              Tip: Open the Shared App link on your physical phone to feel haptics!
-            </span>
+            <Smartphone className="w-5 h-5 text-cyan-400 shrink-0 animate-bounce" />
+            <div className="flex flex-col text-left">
+              <span className="text-[10px] text-zinc-200 font-bold font-mono tracking-wider uppercase">
+                Tactile Feedback Enabled
+              </span>
+              <span className="text-[9px] text-zinc-400 font-sans tracking-wide leading-relaxed max-w-xs">
+                Physical rumble is fully supported on Android browsers. On iOS, Apple blocks vibrations, so we integrated custom visual screen-shake rumble as a fallback!
+              </span>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
